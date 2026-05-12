@@ -48,11 +48,13 @@ app.use('/api', (req, res, next) => {
 });
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────
-function setSessionCookie(res, token) {
+function setSessionCookie(req, res, token) {
+  // req.secure relies on `trust proxy` to honour X-Forwarded-Proto from nginx,
+  // so the cookie is `secure` only when the actual client connection is HTTPS.
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: IS_PROD,
+    secure: req.secure,
     path: '/',
     maxAge: SESSION_TTL_MS,
   });
@@ -122,7 +124,7 @@ app.post('/api/auth/register', registerLimiter, async (req, res) => {
   const hash = await bcrypt.hash(password, BCRYPT_COST);
   const info = stmts.insertUser.run(login, hash, Date.now());
   const token = createSession(info.lastInsertRowid);
-  setSessionCookie(res, token);
+  setSessionCookie(req, res, token);
   res.json({ user: { id: info.lastInsertRowid, login } });
 });
 
@@ -139,7 +141,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
   }
 
   const token = createSession(row.id);
-  setSessionCookie(res, token);
+  setSessionCookie(req, res, token);
   res.json({ user: { id: row.id, login: row.login } });
 });
 
