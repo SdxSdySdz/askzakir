@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AskZakir</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <video id="video-intro" autoplay muted playsinline>
+    <source src="video/intro.mp4" type="video/mp4">
+  </video>
+  <video id="video-loop" muted playsinline loop>
+    <source src="video/loop.mp4" type="video/mp4">
+  </video>
+
+  <div class="blur-overlay" id="blur-overlay"></div>
+
+  <div class="ui-container" id="ui-container">
+    <button class="drawer-toggle" id="drawer-toggle" aria-label="История чатов" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-menu"/></svg>
+    </button>
+    <div class="chat-area" id="chat-area"></div>
+    <div class="pending-pill" id="pending-pill" hidden>
+      <span class="pending-text">У вас остался незаданный вопрос</span>
+      <button type="button" class="pending-send" id="pending-send">Отправить</button>
+      <button type="button" class="pending-dismiss" id="pending-dismiss" aria-label="Отклонить">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg>
+      </button>
+    </div>
+    <div class="input-wrapper">
+      <textarea rows="1" placeholder="Задайте вопрос..." autocomplete="off" spellcheck="false"></textarea>
+      <div class="input-hint">⌘ + Enter</div>
+    </div>
+  </div>
+
+  <!-- Drawer (chat history) -->
+  <div class="drawer-backdrop" id="drawer-backdrop"></div>
+  <aside class="drawer" id="drawer" aria-label="История чатов">
+    <svg class="ornament tl"><use href="#ornament-corner"/></svg>
+    <svg class="ornament tr"><use href="#ornament-corner"/></svg>
+    <header class="drawer-header">
+      <div class="drawer-brand">AskZakir</div>
+    </header>
+    <button class="drawer-new" id="btn-new-chat" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-plus"/></svg>
+      <span>Новый чат</span>
+    </button>
+    <div class="drawer-list-wrap">
+      <ul class="drawer-list" id="drawer-list"></ul>
+      <div class="drawer-empty" id="drawer-empty">История пуста</div>
+    </div>
+    <footer class="drawer-footer" id="drawer-footer">
+      <div class="drawer-user-login" id="drawer-user-login"></div>
+      <button type="button" class="drawer-logout" id="drawer-logout">Выйти</button>
+    </footer>
+  </aside>
+
+  <!-- Auth modal -->
+  <div class="auth-backdrop" id="auth-backdrop"></div>
+  <div class="auth-modal" id="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+    <svg class="ornament tl"><use href="#ornament-corner"/></svg>
+    <svg class="ornament tr"><use href="#ornament-corner"/></svg>
+    <svg class="ornament bl"><use href="#ornament-corner"/></svg>
+    <svg class="ornament br"><use href="#ornament-corner"/></svg>
+
+    <button type="button" class="auth-close" id="auth-close" aria-label="Закрыть">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg>
+    </button>
+
+    <div class="auth-greeting" id="auth-greeting" hidden></div>
+    <h2 class="auth-title" id="auth-title">Создание аккаунта</h2>
+
+    <form class="auth-form" id="auth-form" novalidate>
+      <label class="auth-field">
+        <span>Логин</span>
+        <input type="text" name="login" id="auth-login" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" required minlength="3" maxlength="32">
+      </label>
+      <label class="auth-field">
+        <span>Пароль</span>
+        <input type="password" name="password" id="auth-password" autocomplete="current-password" required minlength="8">
+      </label>
+      <div class="auth-error" id="auth-error" aria-live="polite"></div>
+      <button type="submit" class="auth-submit" id="auth-submit">Зарегистрироваться</button>
+    </form>
+
+    <div class="auth-toggle">
+      <span id="auth-toggle-text">Уже есть аккаунт?</span>
+      <button type="button" id="auth-toggle-btn">Войти</button>
+    </div>
+  </div>
+
+  <!-- Reusable ornament corner (referenced by <use>) -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="ornament-corner" viewBox="0 0 32 32">
+        <path d="M3 16 Q3 3, 16 3" stroke="currentColor" stroke-width="0.9" fill="none" stroke-linecap="round"/>
+        <path d="M8 16 Q8 8, 16 8" stroke="currentColor" stroke-width="0.7" fill="none" opacity="0.55" stroke-linecap="round"/>
+        <circle cx="16" cy="3" r="1.3" fill="currentColor"/>
+        <circle cx="3" cy="16" r="1.3" fill="currentColor"/>
+        <path d="M16 3 L16 6 M3 16 L6 16" stroke="currentColor" stroke-width="0.6" opacity="0.7"/>
+      </symbol>
+      <symbol id="ornament-star" viewBox="0 0 24 24">
+        <path d="M12 2 L14 10 L22 12 L14 14 L12 22 L10 14 L2 12 L10 10 Z" fill="none" stroke="currentColor" stroke-width="0.8"/>
+        <path d="M12 6 L13 11 L18 12 L13 13 L12 18 L11 13 L6 12 L11 11 Z" fill="currentColor" opacity="0.5"/>
+      </symbol>
+      <symbol id="icon-menu" viewBox="0 0 24 24">
+        <line x1="5" y1="8"  x2="19" y2="8"  stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        <line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        <line x1="5" y1="16" x2="19" y2="16" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        <circle cx="12" cy="12" r="1.1" fill="currentColor"/>
+      </symbol>
+      <symbol id="icon-plus" viewBox="0 0 24 24">
+        <line x1="12" y1="6" x2="12" y2="18" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        <line x1="6"  y1="12" x2="18" y2="12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        <circle cx="12" cy="12" r="0.9" fill="currentColor"/>
+      </symbol>
+      <symbol id="icon-close" viewBox="0 0 24 24">
+        <line x1="7" y1="7" x2="17" y2="17" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        <line x1="17" y1="7" x2="7" y2="17" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <!-- Dev Panel -->
+  <div id="dev-panel">
+    <div class="dev-title">Dev Panel</div>
+    <label>Ширина поля <span id="v-input-w">500</span>px
+      <input type="range" id="r-input-w" min="200" max="900" value="500">
+    </label>
+    <label>Ширина размытия <span id="v-blur-w">50</span>%
+      <input type="range" id="r-blur-w" min="20" max="100" value="50">
+    </label>
+    <label>Сила размытия <span id="v-blur-s">16</span>px
+      <input type="range" id="r-blur-s" min="0" max="40" value="16">
+    </label>
+    <label>Граница размытия <span id="v-blur-edge">40</span>%
+      <input type="range" id="r-blur-edge" min="0" max="90" value="40">
+    </label>
+    <label>Затемнение <span id="v-dark">0.25</span>
+      <input type="range" id="r-dark" min="0" max="60" value="25">
+    </label>
+    <button type="button" id="btn-skip-thinking" class="dev-btn" disabled>Пропустить thinking</button>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
