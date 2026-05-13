@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
-# AskZakir — VPS bootstrap. Идемпотентно: можно перезапускать.
+# AskZakir — one-shot VPS bootstrap. Запускается ОДИН раз на свежем сервере.
+# Для последующих деплоев используется deploy/update.sh.
 #
-# Использование (на свежем Ubuntu/Debian, под root):
+# Что делает:
+#   - ставит OS-пакеты (Node, nginx, certbot, sops, age, ufw, fail2ban-stub)
+#   - клонирует репозиторий
+#   - устанавливает npm-зависимости
+#   - создаёт systemd unit + nginx server-block
+#   - открывает порты 80/443 в ufw
+#   - пытается выдать LE-сертификат (если DNS уже резолвится)
+#
+# Использование (под root):
 #   curl -fsSL https://raw.githubusercontent.com/SdxSdySdz/askzakir/main/deploy/bootstrap.sh | bash
 
 set -euo pipefail
@@ -20,32 +29,52 @@ die()  { printf '\n\033[1;31m✗ %s\033[0m\n' "$*"; exit 1; }
 
 [ "$(id -u)" -eq 0 ] || die "запускать от root"
 
-log "обновляем пакеты и ставим базу"
+log "обновляем пакеты и ставим базу (nginx, certbot, sops, age, ufw)"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq curl git nginx ca-certificates gnupg ufw build-essential python3-certbot-nginx
+apt-get install -y -qq \
+  curl git nginx ca-certificates gnupg ufw build-essential \
+  python3-certbot-nginx age
+
+# sops в Debian/Ubuntu иногда нет в apt — ставим бинарником с GitHub releases.
+if ! command -v sops >/dev/null; then
+  log "ставим sops из GitHub"
+  SOPS_VER="v3.9.4"
+  ARCH="$(dpkg --print-architecture)"  # amd64 / arm64
+  curl -fsSL -o /usr/local/bin/sops \
+    "https://github.com/getsops/sops/releases/download/${SOPS_VER}/sops-${SOPS_VER}.linux.${ARCH}"
+  chmod +x /usr/local/bin/sops
+fi
 
 if ! command -v node >/dev/null || ! node --version | grep -q "v${NODE_MAJOR}"; then
   log "ставим Node ${NODE_MAJOR}"
   curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash -
   apt-get install -y -qq nodejs
 fi
-log "node $(node --version), npm $(npm --version)"
+log "node $(node --version), npm $(npm --version), sops $(sops --version | head -1)"
 
-log "клонируем/обновляем код в ${APP_DIR}"
+log "клонируем код в ${APP_DIR}"
 if [ ! -d "${APP_DIR}/.git" ]; then
   git clone --depth 1 "${REPO}" "${APP_DIR}"
 else
-  git -C "${APP_DIR}" fetch --quiet origin main
-  git -C "${APP_DIR}" reset --hard origin/main --quiet
+  warn "${APP_DIR} уже существует — оставляю как есть. Для обновления используй update.sh"
 fi
 
-log "ставим зависимости (npm ci --omit=dev)"
+log "ставим зависимости"
 cd "${APP_DIR}"
 npm ci --omit=dev --silent
 
-if [ ! -f "${APP_DIR}/.env" ]; then
-  log "генерируем .env"
+# Подготовка каталога для age-ключа. Сам ключ переносится руками или через GH Actions secret.
+mkdir -p /etc/sops/age
+chmod 700 /etc/sops/age
+if [ ! -f /etc/sops/age/keys.txt ]; then
+  warn "/etc/sops/age/keys.txt не найден"
+  warn "Перенеси приватный age-key с dev-машины (см. .sops.yaml.example в репо)"
+  warn "После этого выполни: SOPS_AGE_KEY_FILE=/etc/sops/age/keys.txt deploy/decrypt-env.sh"
+fi
+
+if [ ! -f "${APP_DIR}/.env" ] && [ ! -f "${APP_DIR}/.env.sops.yaml" ]; then
+  log "генерируем .env (для запуска без sops)"
   SESSION_SECRET="$(node -e 'console.log(require("crypto").randomBytes(32).toString("hex"))')"
   cat > "${APP_DIR}/.env" <<EOF
 SESSION_SECRET=${SESSION_SECRET}
@@ -53,8 +82,12 @@ PORT=3000
 NODE_ENV=production
 EOF
   chmod 600 "${APP_DIR}/.env"
-else
-  log ".env уже есть — не трогаю"
+fi
+
+# Если есть зашифрованный .env.sops.yaml — попробуем расшифровать (мягко, не валим, если нет ключа).
+if [ -f "${APP_DIR}/.env.sops.yaml" ] && [ -f /etc/sops/age/keys.txt ]; then
+  log "расшифровываем .env.sops.yaml"
+  bash "${APP_DIR}/deploy/decrypt-env.sh"
 fi
 
 log "systemd unit"
@@ -128,9 +161,10 @@ if certbot --nginx -n --agree-tos -m "${LE_EMAIL}" -d "${DOMAIN}" -d "${ALT_DOMA
   log "✓ HTTPS установлен"
 else
   warn "certbot отказал (часто из-за того что DNS ещё не пропагирован)."
-  warn "Перезапусти этот скрипт через 10-20 минут, когда askzakir.ru начнёт резолвиться на этот сервер."
+  warn "Перезапусти этот скрипт через 10-20 минут."
 fi
 
-log "Готово. Логи приложения: journalctl -u ${SERVICE_NAME} -f"
-log "Перезапустить:           systemctl restart ${SERVICE_NAME}"
-log "Обновить код:             cd ${APP_DIR} && git pull && systemctl restart ${SERVICE_NAME}"
+log "Готово."
+log "  Логи:        journalctl -u ${SERVICE_NAME} -f"
+log "  Перезапуск:  systemctl restart ${SERVICE_NAME}"
+log "  Обновление:  bash ${APP_DIR}/deploy/update.sh"

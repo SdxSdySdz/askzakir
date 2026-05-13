@@ -1,0 +1,22 @@
+# sops config. Скопируй в `.sops.yaml` и подставь свой age public key.
+#
+# Setup (один раз, локально):
+#   brew install sops age
+#   age-keygen -o ~/.config/sops/age/keys.txt
+#   # → возьми из файла строку `# public key: age1...` — это AGE_PUBLIC_KEY ниже.
+#
+# Затем:
+#   cp .sops.yaml.example .sops.yaml
+#   # вставь свой public key
+#   sops -e .env > .env.sops.yaml
+#   git add .env.sops.yaml .sops.yaml
+#   # .env остаётся в .gitignore, как и приватный ключ
+#
+# На сервере (один раз):
+#   # перенеси ~/.config/sops/age/keys.txt на сервер в /etc/sops/age/keys.txt
+#   # сделай его читаемым только root: chmod 600 + chown root:root
+#   # bootstrap.sh подхватит и расшифрует .env.sops.yaml перед запуском systemd.
+
+creation_rules:
+  - path_regex: \.env\.sops\.yaml$
+    age: AGE_PUBLIC_KEY_REPLACE_ME
