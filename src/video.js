@@ -23,38 +23,25 @@ export function showUI() {
   ui.classList.add('visible');
 }
 
-// Снимаем mute. Yandex Browser иногда отказывает на «несвежий» клик и паузит видео —
-// делаем explicit pause→muted=false→play() цикл внутри user-gesture; если всё равно
-// отбили (или async-pause) — возвращаемся к muted, но без чёрного экрана.
+// Снимаем mute без перезапуска и пауз видео.
 export function tryUnmute() {
   if (isLandingMode()) return;
   if (!started) return;
   if (unmuted) return;
   unmuted = true;
-  const activeSession = session;
 
-  function explicitUnmute(el) {
-    if (el.ended) return;
-    const t = el.currentTime;
-    el.pause();
-    el.muted = false;
-    el.currentTime = t;
-    el.play().catch(() => {
-      if (!started || activeSession !== session || isLandingMode()) return;
-      el.muted = true;
-      el.play().catch(() => {});
+  intro.muted = false;
+  loop.muted = false;
+  intro.volume = 1;
+  loop.volume = 1;
+
+  // Если браузер заблокировал анмьют на лету, мягко возвращаем mute
+  if (intro.paused && !intro.ended) {
+    intro.play().catch(() => {
+      intro.muted = true;
+      intro.play().catch(() => {});
     });
-    setTimeout(() => {
-      if (!started || activeSession !== session || isLandingMode()) return;
-      if (el.paused && !el.ended) {
-        el.muted = true;
-        el.play().catch(() => {});
-      }
-    }, 250);
   }
-
-  explicitUnmute(intro);
-  if (loop.classList.contains('active')) explicitUnmute(loop);
 }
 
 function makeAudible() {
@@ -179,10 +166,21 @@ export function initVideo() {
     showUI();
   };
 
+  // Предзагрузка loop, когда intro подходит к концу
+  intro.addEventListener('timeupdate', () => {
+    if (!started || isLandingMode()) return;
+    if (intro.duration && (intro.duration - intro.currentTime < 1.5)) {
+      if (loop.preload !== 'auto') {
+        loop.preload = 'auto';
+        loop.load();
+      }
+    }
+  });
+
   intro.addEventListener('ended', () => {
     if (!started || isLandingMode()) return;
     loop.classList.add('active');
-    loop.play();
+    loop.play().catch(() => {});
   });
 
   intro.addEventListener('playing', () => {
