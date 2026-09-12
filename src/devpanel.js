@@ -36,6 +36,10 @@ function updateFromSliders(save) {
 }
 
 export function initDevPanel() {
+  const devEnabled = new URLSearchParams(window.location.search).has('dev');
+  if (!devEnabled) return;
+  document.body.classList.add('dev-mode');
+
   // На мобиле панель скрыта в CSS, и её inline-styles (особенно blur width:50%)
   // переопределяют mobile media-query → ai-response не читается. Просто скипаем init.
   if (window.matchMedia('(max-width: 768px)').matches) return;

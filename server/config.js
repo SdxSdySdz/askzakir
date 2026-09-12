@@ -19,10 +19,12 @@ export const config = {
   sessionSecret: required('SESSION_SECRET'),
   cookieName:    'az_session',
   sessionTtlMs:  30 * 24 * 60 * 60 * 1000, // 30 days
-  bcryptCost:    12,
-  loginRe:       /^[a-zA-Z0-9_.\-]{3,32}$/,
-  passwordMin:   8,
-  passwordMaxBytes: 72, // bcrypt truncates at 72 bytes; reject longer
   messageMaxLen: 8000,
   jsonBodyLimit: '32kb',
+  aiEnabled:     Boolean(process.env.AI_API_KEY && process.env.AI_CHAT_ENDPOINT),
+  aiApiKey:      process.env.AI_API_KEY || '',
+  aiChatEndpoint: process.env.AI_CHAT_ENDPOINT || '',
+  aiModel:       process.env.AI_MODEL || 'gpt-5.4',
+  aiReasoningEffort: process.env.AI_REASONING_EFFORT || 'xhigh',
+  aiTimeoutMs:   Number(process.env.AI_TIMEOUT_MS) || 90000,
 };

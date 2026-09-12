@@ -30,11 +30,10 @@ export async function api(method, path, body) {
 }
 
 export const AUTH_ERROR_MAP = {
-  invalid_login:       'Логин: 3–32 символа, латиница, цифры, _ . -',
-  invalid_password:    'Пароль должен быть от 8 символов',
-  login_taken:         'Этот логин уже занят',
-  invalid_credentials: 'Неверный логин или пароль',
+  invalid_provider:    'Неизвестный способ входа.',
+  invalid_provider_user: 'Не удалось подготовить профиль для входа.',
   rate_limited:        'Слишком много попыток. Попробуйте позже.',
+  quota_exceeded:      'Бесплатный вопрос за этот месяц уже использован.',
   network:             'Нет соединения с сервером',
   unknown:             'Что-то пошло не так. Попробуйте ещё раз.',
 };

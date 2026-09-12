@@ -8,6 +8,7 @@ import { csrfGuard } from './middleware/csrf.js';
 import { errorHandler } from './middleware/error.js';
 import { authRouter, meHandler } from './routes/auth.js';
 import { chatsRouter } from './routes/chats.js';
+import { billingRouter } from './routes/billing.js';
 import { startSessionGc } from './services/sessions.js';
 import { logger, httpLogger, initSentry } from './observability.js';
 
@@ -29,6 +30,7 @@ export function createApp() {
   // API routes
   app.use('/api/auth', authRouter);
   app.get('/api/me', meHandler);
+  app.use('/api/billing', billingRouter);
   app.use('/api/chats', chatsRouter);
 
   // Static (after API so /api/* takes precedence).

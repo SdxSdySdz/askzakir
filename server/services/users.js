@@ -1,46 +1,62 @@
-import bcrypt from 'bcrypt';
+import crypto from 'node:crypto';
 import { stmts } from '../../db/client.js';
-import { config } from '../config.js';
 
-// Dummy bcrypt hash to mitigate user-enumeration via timing on /login: we run
-// bcrypt.compare even for missing users so response time doesn't reveal account existence.
-const DUMMY_HASH = bcrypt.hashSync('::dummy::', config.bcryptCost);
+const PROVIDERS = new Set(['telegram', 'google', 'yandex']);
 
 export class UserError extends Error {
   constructor(code) { super(code); this.code = code; }
 }
 
-function normaliseLogin(raw) {
+function normaliseProvider(raw) {
   return String(raw ?? '').trim().toLowerCase();
 }
 
-function validatePassword(raw) {
-  const pw = String(raw ?? '');
-  if (pw.length < config.passwordMin) throw new UserError('invalid_password');
-  if (Buffer.byteLength(pw, 'utf8') > config.passwordMaxBytes) throw new UserError('invalid_password');
-  return pw;
+function normaliseProviderUserId(raw) {
+  return String(raw ?? '').trim();
 }
 
-export async function registerUser({ login, password }) {
-  login = normaliseLogin(login);
-  if (!config.loginRe.test(login)) throw new UserError('invalid_login');
-  const pw = validatePassword(password);
-  if (stmts.getUserByLogin.get(login)) throw new UserError('login_taken');
-  const hash = await bcrypt.hash(pw, config.bcryptCost);
-  const info = stmts.insertUser.run(login, hash, Date.now());
-  return { id: info.lastInsertRowid, login };
+function providerLabel(provider) {
+  if (provider === 'telegram') return 'Telegram';
+  if (provider === 'google') return 'Google';
+  if (provider === 'yandex') return 'Yandex';
+  return 'User';
 }
 
-export async function authenticateUser({ login, password }) {
-  login = normaliseLogin(login);
-  const pw = String(password ?? '');
-  const row = stmts.getUserByLogin.get(login);
-  const hash = row ? row.password_hash : DUMMY_HASH;
-  const ok = await bcrypt.compare(pw, hash);
-  if (!row || !ok) throw new UserError('invalid_credentials');
-  return { id: row.id, login: row.login };
+function makeDisplayName(provider, providerUserId) {
+  const suffix = crypto
+    .createHash('sha1')
+    .update(`${provider}:${providerUserId}`)
+    .digest('hex')
+    .slice(0, 6)
+    .toUpperCase();
+  return `${providerLabel(provider)} ${suffix}`;
+}
+
+export async function signInWithProvider({ provider, providerUserId }) {
+  provider = normaliseProvider(provider);
+  providerUserId = normaliseProviderUserId(providerUserId);
+
+  if (!PROVIDERS.has(provider)) throw new UserError('invalid_provider');
+  if (providerUserId.length < 16) throw new UserError('invalid_provider_user');
+
+  const existing = stmts.getUserByProviderIdentity.get(provider, providerUserId);
+  if (existing) {
+    return {
+      id: existing.id,
+      provider: existing.provider,
+      displayName: existing.display_name,
+    };
+  }
+
+  const displayName = makeDisplayName(provider, providerUserId);
+  const info = stmts.insertUser.run(provider, providerUserId, displayName, Date.now());
+  return { id: info.lastInsertRowid, provider, displayName };
 }
 
 export function publicUser(u) {
-  return { id: u.id, login: u.login };
+  return {
+    id: u.id,
+    provider: u.provider,
+    displayName: u.display_name ?? u.displayName,
+  };
 }

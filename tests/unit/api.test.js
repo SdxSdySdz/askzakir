@@ -7,7 +7,7 @@ const CSRF = { 'X-Requested-With': 'fetch' };
 
 describe('CSRF guard', () => {
   it('блокирует POST без X-Requested-With', async () => {
-    const res = await request(app).post('/api/auth/register').send({ login: 'a', password: 'b' });
+    const res = await request(app).post('/api/auth/provider').send({ provider: 'telegram' });
     expect(res.status).toBe(403);
   });
   it('пропускает GET без заголовка', async () => {
@@ -17,15 +17,19 @@ describe('CSRF guard', () => {
 });
 
 describe('auth flow', () => {
-  it('register → me → logout → me=401', async () => {
+  it('provider sign-in → me → logout → me=401', async () => {
     const agent = request.agent(app);
-    let r = await agent.post('/api/auth/register').set(CSRF).send({ login: 'apitest', password: 'longpassword' });
+    let r = await agent
+      .post('/api/auth/provider')
+      .set(CSRF)
+      .send({ provider: 'telegram', providerUserId: 'telegram-agent-000001' });
     expect(r.status).toBe(200);
-    expect(r.body.user.login).toBe('apitest');
+    expect(r.body.user.provider).toBe('telegram');
+    expect(r.body.user.displayName).toMatch(/^Telegram /);
 
     r = await agent.get('/api/me');
     expect(r.status).toBe(200);
-    expect(r.body.user.login).toBe('apitest');
+    expect(r.body.user.provider).toBe('telegram');
 
     r = await agent.post('/api/auth/logout').set(CSRF);
     expect(r.status).toBe(204);
@@ -34,19 +38,14 @@ describe('auth flow', () => {
     expect(r.status).toBe(401);
   });
 
-  it('login проваливается на неверном пароле', async () => {
+  it('возвращает 400 на неизвестном провайдере', async () => {
     const agent = request.agent(app);
-    await agent.post('/api/auth/register').set(CSRF).send({ login: 'logintest', password: 'longpassword' });
-    const r = await agent.post('/api/auth/login').set(CSRF).send({ login: 'logintest', password: 'wrong' });
-    expect(r.status).toBe(401);
-    expect(r.body.error).toBe('invalid_credentials');
-  });
-
-  it('одинаковый ответ для несуществующего юзера и неверного пароля', async () => {
-    const agent = request.agent(app);
-    const r = await agent.post('/api/auth/login').set(CSRF).send({ login: 'ghost', password: 'whatever' });
-    expect(r.status).toBe(401);
-    expect(r.body.error).toBe('invalid_credentials');
+    const r = await agent
+      .post('/api/auth/provider')
+      .set(CSRF)
+      .send({ provider: 'vk', providerUserId: 'vk-agent-000001' });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toBe('invalid_provider');
   });
 });
 
@@ -58,7 +57,10 @@ describe('chats', () => {
 
   it('lazy chat creation в одной транзакции', async () => {
     const agent = request.agent(app);
-    await agent.post('/api/auth/register').set(CSRF).send({ login: 'chatuser', password: 'longpassword' });
+    await agent
+      .post('/api/auth/provider')
+      .set(CSRF)
+      .send({ provider: 'google', providerUserId: 'google-chat-user-000001' });
 
     let r = await agent.get('/api/chats');
     expect(r.body.chats).toEqual([]);
@@ -77,10 +79,16 @@ describe('chats', () => {
   it('кросс-юзерный доступ к чужому чату → 404', async () => {
     const userA = request.agent(app);
     const userB = request.agent(app);
-    await userA.post('/api/auth/register').set(CSRF).send({ login: 'usera', password: 'longpassword' });
+    await userA
+      .post('/api/auth/provider')
+      .set(CSRF)
+      .send({ provider: 'telegram', providerUserId: 'telegram-user-a-000001' });
     const r1 = await userA.post('/api/chats/new/messages').set(CSRF).send({ content: 'a-secret' });
     const aChatId = r1.body.chatId;
-    await userB.post('/api/auth/register').set(CSRF).send({ login: 'userb', password: 'longpassword' });
+    await userB
+      .post('/api/auth/provider')
+      .set(CSRF)
+      .send({ provider: 'yandex', providerUserId: 'yandex-user-b-000001' });
     const r2 = await userB.get(`/api/chats/${aChatId}`);
     expect(r2.status).toBe(404);
   });

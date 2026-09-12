@@ -7,6 +7,7 @@ import {
   appendMessage,
   ChatError,
 } from '../services/chats.js';
+import { BillingError } from '../services/billing.js';
 
 export const chatsRouter = Router();
 
@@ -35,11 +36,14 @@ chatsRouter.delete('/:id', (req, res, next) => {
   }
 });
 
-chatsRouter.post('/:id/messages', (req, res, next) => {
+chatsRouter.post('/:id/messages', async (req, res, next) => {
   try {
-    res.json(appendMessage(req.user.id, req.params.id, req.body?.content));
+    res.json(await appendMessage(req.user.id, req.params.id, req.body?.content));
   } catch (err) {
     if (err instanceof ChatError) return res.status(err.status).json({ error: err.code });
+    if (err instanceof BillingError) {
+      return res.status(err.status).json({ error: err.code, billing: err.billing });
+    }
     next(err);
   }
 });

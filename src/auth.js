@@ -1,38 +1,65 @@
-import { appState, GREETING_TEXT, readPending, clearPending } from './state.js';
+import { appState, GREETING_TEXT, readPending, writePending, clearPending } from './state.js';
 import { api, AUTH_ERROR_MAP } from './api.js';
-import { send } from './chat.js';
-import { loadChats, renderDrawerFooter, closeDrawer } from './drawer.js';
+import { fillQuestionInput } from './chat.js';
+import { loadChats, renderDrawerFooter } from './drawer.js';
+import { primeVideoAudio, stopVideo } from './video.js';
+import { setBilling } from './billing.js';
 
-const authModal    = document.getElementById('auth-modal');
+const AUTH_PROVIDER_KEY = 'askzakir:provider-identities';
+const authModal = document.getElementById('auth-modal');
 const authBackdrop = document.getElementById('auth-backdrop');
-const authForm     = document.getElementById('auth-form');
-const authTitle    = document.getElementById('auth-title');
+const authForm = document.getElementById('auth-form');
+const authTitle = document.getElementById('auth-title');
 const authGreeting = document.getElementById('auth-greeting');
-const authError    = document.getElementById('auth-error');
-const authSubmit   = document.getElementById('auth-submit');
-const authToggleText = document.getElementById('auth-toggle-text');
-const authToggleBtn  = document.getElementById('auth-toggle-btn');
-const authCloseBtn   = document.getElementById('auth-close');
-const authLogin    = document.getElementById('auth-login');
-const authPassword = document.getElementById('auth-password');
-const inputWrapper = document.querySelector('.input-wrapper');
-const inputEl     = inputWrapper.querySelector('textarea');
+const authError = document.getElementById('auth-error');
+const authCloseBtn = document.getElementById('auth-close');
+const providerButtons = Array.from(document.querySelectorAll('.auth-provider'));
 
-let mode = 'register';
+function providerLabel(provider) {
+  if (provider === 'telegram') return 'Телеграм';
+  if (provider === 'google') return 'Гугл почта';
+  if (provider === 'yandex') return 'Яндекс почта';
+  return 'Провайдер';
+}
 
-export function openAuthModal(_mode, greetingText) {
-  mode = _mode || 'register';
+function readProviderMap() {
+  try {
+    return JSON.parse(localStorage.getItem(AUTH_PROVIDER_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function writeProviderMap(map) {
+  try {
+    localStorage.setItem(AUTH_PROVIDER_KEY, JSON.stringify(map));
+  } catch {}
+}
+
+function ensureProviderIdentity(provider) {
+  const map = readProviderMap();
+  if (!map[provider]) {
+    map[provider] = crypto.randomUUID().replace(/-/g, '');
+    writeProviderMap(map);
+  }
+  return map[provider];
+}
+
+function setBusy(state) {
+  for (const button of providerButtons) button.disabled = state;
+}
+
+export function openAuthModal(greetingText) {
+  authTitle.textContent = 'Выберите способ входа';
+  authError.textContent = '';
   if (greetingText) {
     authGreeting.textContent = greetingText;
     authGreeting.hidden = false;
   } else {
     authGreeting.hidden = true;
   }
-  applyMode();
-  authError.textContent = '';
   authBackdrop.classList.add('open');
   authModal.classList.add('open');
-  setTimeout(() => authLogin.focus(), 60);
 }
 
 export function closeAuthModal() {
@@ -40,82 +67,60 @@ export function closeAuthModal() {
   authBackdrop.classList.remove('open');
 }
 
-function applyMode() {
-  if (mode === 'register') {
-    authTitle.textContent = 'Создание аккаунта';
-    authSubmit.textContent = 'Зарегистрироваться';
-    authToggleText.textContent = 'Уже есть аккаунт?';
-    authToggleBtn.textContent = 'Войти';
-    authPassword.setAttribute('autocomplete', 'new-password');
-  } else {
-    authTitle.textContent = 'Вход';
-    authSubmit.textContent = 'Войти';
-    authToggleText.textContent = 'Ещё нет аккаунта?';
-    authToggleBtn.textContent = 'Зарегистрироваться';
-    authPassword.setAttribute('autocomplete', 'current-password');
-  }
-}
-
-function clearInput() {
-  inputEl.value = '';
-  inputEl.style.height = 'auto';
-  inputEl.style.height = Math.min(inputEl.scrollHeight, 200) + 'px';
-  inputWrapper.classList.remove('has-text');
-}
-
-async function handleSubmit(e) {
-  e.preventDefault();
-  if (authSubmit.disabled) return;
-  const login = authLogin.value.trim().toLowerCase();
-  const password = authPassword.value;
-  if (!login || !password) { authError.textContent = 'Заполните оба поля'; return; }
-  if (password.length < 8)  { authError.textContent = AUTH_ERROR_MAP.invalid_password; return; }
-
+async function signIn(provider) {
   authError.textContent = '';
-  authSubmit.disabled = true;
-  const original = authSubmit.textContent;
-  authSubmit.textContent = '…';
-
+  setBusy(true);
   try {
-    const path = mode === 'register' ? '/api/auth/register' : '/api/auth/login';
-    const { user } = await api('POST', path, { login, password });
+    const providerUserId = ensureProviderIdentity(provider);
+    const { user, billing } = await api('POST', '/api/auth/provider', { provider, providerUserId });
     appState.user = user;
+    setBilling(billing);
     closeAuthModal();
-    authForm.reset();
     await loadChats();
     renderDrawerFooter();
     const pending = readPending();
     if (pending) {
       clearPending();
-      clearInput();           // вопрос станет user-сообщением в чате, в input он больше не нужен
       appState.currentChatId = 'new';
-      send(pending);
+      document.dispatchEvent(new CustomEvent('auth:success', { detail: { pending } }));
+      fillQuestionInput(pending);
+    } else {
+      document.dispatchEvent(new CustomEvent('auth:success'));
     }
   } catch (err) {
-    authError.textContent = AUTH_ERROR_MAP[err.code] || AUTH_ERROR_MAP.unknown;
+    stopVideo();
+    const providerName = providerLabel(provider);
+    authError.textContent =
+      AUTH_ERROR_MAP[err.code] || `Не удалось войти через ${providerName}. Попробуйте ещё раз.`;
   } finally {
-    authSubmit.disabled = false;
-    authSubmit.textContent = original;
+    setBusy(false);
   }
 }
 
+async function handleSubmit(e) {
+  e.preventDefault();
+  const provider = e.submitter?.dataset?.provider;
+  if (!provider) return;
+  primeVideoAudio();
+  await signIn(provider);
+}
+
 export function initAuth() {
-  authToggleBtn.addEventListener('click', () => {
-    mode = mode === 'register' ? 'login' : 'register';
-    authError.textContent = '';
-    applyMode();
-  });
   authCloseBtn.addEventListener('click', closeAuthModal);
   authBackdrop.addEventListener('click', closeAuthModal);
   authForm.addEventListener('submit', handleSubmit);
 
-  // chat.send() при анонимной отправке кидает это событие.
-  document.addEventListener('auth:gate', () => openAuthModal('register', GREETING_TEXT));
+  document.addEventListener('auth:gate', () => openAuthModal(GREETING_TEXT));
 
-  // pending-pill в drawer выпускает эти события.
   document.addEventListener('pending:send', (e) => {
+    const text = e.detail.text;
     clearPending();
-    send(e.detail.text);
+    if (appState.user) {
+      fillQuestionInput(text);
+    } else {
+      writePending(text);
+      openAuthModal(GREETING_TEXT);
+    }
   });
   document.addEventListener('pending:dismiss', () => clearPending());
 }

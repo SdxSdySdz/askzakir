@@ -1,6 +1,7 @@
 // Единый изменяемый стор. Импортируется всеми модулями, мутируется в одном-двух местах.
 export const appState = {
-  user: null,           // {id, login} | null
+  user: null,           // {id, provider, displayName} | null
+  billing: null,        // server billing snapshot: plan + usage + tariff catalog
   currentChatId: null,  // number | 'new' | null
   chats: [],            // [{id, title, updated_at}]
   staticMode: false,    // true когда backend недоступен (GitHub Pages-демо)

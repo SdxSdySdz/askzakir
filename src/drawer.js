@@ -1,6 +1,6 @@
 import { appState, readPending } from './state.js';
 import { api } from './api.js';
-import { clearChatArea, renderHistoricalTurn, isBusy, send } from './chat.js';
+import { clearChatArea, renderHistoricalTurn, send } from './chat.js';
 
 const drawerEl       = document.getElementById('drawer');
 const drawerBackdrop = document.getElementById('drawer-backdrop');
@@ -22,7 +22,7 @@ export function closeDrawer() { drawerEl.classList.remove('open'); drawerBackdro
 export function renderDrawerFooter() {
   if (appState.user) {
     drawerFooter.hidden = false;
-    drawerUserLogin.textContent = appState.user.login;
+    drawerUserLogin.textContent = appState.user.displayName;
   } else {
     drawerFooter.hidden = true;
   }
@@ -57,7 +57,6 @@ export async function loadChats() {
 }
 
 async function selectChat(id) {
-  if (isBusy()) return;
   closeDrawer();
   try {
     const { chat } = await api('GET', `/api/chats/${id}`);
@@ -96,6 +95,7 @@ async function logout() {
   renderDrawerList();
   renderDrawerFooter();
   closeDrawer();
+  document.dispatchEvent(new CustomEvent('auth:logout'));
 }
 
 export function initDrawer() {

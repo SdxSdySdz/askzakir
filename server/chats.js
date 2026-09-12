@@ -1,6 +1,5 @@
 import { db, stmts } from '../../db/client.js';
 import { config } from '../config.js';
-import { reserveMessage, releaseMessage } from './billing.js';
 
 export class ChatError extends Error {
   constructor(code, status = 400) { super(code); this.code = code; this.status = status; }
@@ -121,31 +120,24 @@ export async function appendMessage(userId, idParam, content) {
     history = stmts.listMessages.all(chatId);
   }
 
-  const reservation = reserveMessage(userId);
-  try {
-    const assistantText = await generateAssistantReply(history, content);
-    const now = Date.now();
-    return db.transaction(() => {
-      let persistedChatId = chatId;
-      if (idParam === 'new') {
-        const info = stmts.insertChat.run(userId, titleFromContent(content), now, now);
-        persistedChatId = info.lastInsertRowid;
-      } else {
-        stmts.touchChat.run(now, persistedChatId);
-      }
+  const assistantText = await generateAssistantReply(history, content);
+  const now = Date.now();
+  return db.transaction(() => {
+    let persistedChatId = chatId;
+    if (idParam === 'new') {
+      const info = stmts.insertChat.run(userId, titleFromContent(content), now, now);
+      persistedChatId = info.lastInsertRowid;
+    } else {
+      stmts.touchChat.run(now, persistedChatId);
+    }
 
-      const userInfo = stmts.insertMessage.run(persistedChatId, 'user', content, now);
-      const aiInfo   = stmts.insertMessage.run(persistedChatId, 'assistant', assistantText, now + 1);
+    const userInfo = stmts.insertMessage.run(persistedChatId, 'user', content, now);
+    const aiInfo   = stmts.insertMessage.run(persistedChatId, 'assistant', assistantText, now + 1);
 
-      return {
-        chatId: persistedChatId,
-        userMessage: { id: userInfo.lastInsertRowid, role: 'user', content, created_at: now },
-        aiMessage:   { id: aiInfo.lastInsertRowid,   role: 'assistant', content: assistantText, created_at: now + 1 },
-        billing: reservation.billing,
-      };
-    })();
-  } catch (err) {
-    releaseMessage(reservation);
-    throw err;
-  }
+    return {
+      chatId: persistedChatId,
+      userMessage: { id: userInfo.lastInsertRowid, role: 'user', content, created_at: now },
+      aiMessage:   { id: aiInfo.lastInsertRowid,   role: 'assistant', content: assistantText, created_at: now + 1 },
+    };
+  })();
 }

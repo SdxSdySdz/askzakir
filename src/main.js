@@ -1,14 +1,17 @@
 import { appState, readPending } from './state.js';
 import { api } from './api.js';
-import { initVideo, showUI, tryUnmute } from './video.js';
+import { initVideo, showUI, startVideo, stopVideo, tryUnmute } from './video.js';
 import { send, initChat } from './chat.js';
 import { initDrawer, loadChats, renderDrawerFooter, hideDrawerForStaticMode } from './drawer.js';
 import { initAuth } from './auth.js';
+import { initLanding, showLanding, hideLanding } from './landing.js';
 import { initDevPanel } from './devpanel.js';
 import { initFrontendSentry, reportFrontendError } from './observability.js';
+import { initBilling, setBilling } from './billing.js?v=20260709-1938';
 
 const inputWrapper = document.querySelector('.input-wrapper');
 const input        = inputWrapper.querySelector('textarea');
+const inputSend    = document.getElementById('input-send');
 const pendingPill  = document.getElementById('pending-pill');
 const pendingText  = pendingPill.querySelector('.pending-text');
 
@@ -18,24 +21,21 @@ function autoresize() {
   input.style.height = Math.min(input.scrollHeight, 200) + 'px';
 }
 
-function clearInput() {
-  input.value = '';
-  autoresize();
-  inputWrapper.classList.remove('has-text');
-}
-
 function initInput() {
+  function submitInput() {
+    const value = input.value;
+    if (!value.trim()) return;
+    send(value);
+  }
+
   // Cmd/Ctrl + Enter — отправка; plain Enter — обычный перенос строки (textarea).
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
-      const value = input.value;
-      if (!value.trim()) return;
-      // В anon-flow textarea оставляем — модалка оверлей и юзер должен видеть свой вопрос.
-      if (appState.user || appState.staticMode) clearInput();
-      send(value);
+      submitInput();
     }
   });
+  inputSend.addEventListener('click', submitInput);
   input.addEventListener('input', () => {
     autoresize();
     inputWrapper.classList.toggle('has-text', input.value.length > 0);
@@ -44,9 +44,14 @@ function initInput() {
 }
 
 // ─── Глобальные обработчики click/keydown для unmute+showUI ──────────────
+function canActivateVideo() {
+  return Boolean(appState.user || appState.staticMode);
+}
+
 function initGlobalGestureHandlers() {
   document.addEventListener('click', (e) => {
     if (e.target.closest('#dev-panel')) return;
+    if (!canActivateVideo()) return;
     if (e.target.closest('.input-wrapper')) { tryUnmute(); return; }
     tryUnmute();
     showUI();
@@ -54,6 +59,7 @@ function initGlobalGestureHandlers() {
 
   document.addEventListener('keydown', (e) => {
     if (e.target.closest('#dev-panel')) return;
+    if (!canActivateVideo()) return;
     tryUnmute();
     if (typeof e.key === 'string' && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
       // Если UI ещё скрыт — раскрываем и фокусируемся в textarea на первой печатной клавише.
@@ -78,8 +84,11 @@ function initGlobalGestureHandlers() {
 // ─── Bootstrap ────────────────────────────────────────────────────────────
 async function bootstrap() {
   try {
-    const { user } = await api('GET', '/api/me');
+    const { user, billing } = await api('GET', '/api/me');
     appState.user = user;
+    setBilling(billing);
+    hideLanding();
+    startVideo();
     renderDrawerFooter();
     await loadChats();
 
@@ -89,7 +98,10 @@ async function bootstrap() {
       pendingPill.hidden = false;
     }
   } catch (err) {
-    if (err.status === 401) return; // нормальный аноним
+    if (err.status === 401) {
+      showLanding();
+      return;
+    }
     // Бэк недоступен (404/network) → GitHub Pages-демо: static-mode + спрятать drawer.
     appState.staticMode = true;
     hideDrawerForStaticMode();
@@ -97,7 +109,7 @@ async function bootstrap() {
 }
 
 // ─── Entry ────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
+function initApp() {
   initFrontendSentry();
   window.addEventListener('error',              (e) => reportFrontendError(e.error || e.message));
   window.addEventListener('unhandledrejection', (e) => reportFrontendError(e.reason));
@@ -106,8 +118,21 @@ document.addEventListener('DOMContentLoaded', () => {
   initChat();
   initDrawer();
   initAuth();
+  initBilling();
+  initLanding();
   initDevPanel();
   initInput();
   initGlobalGestureHandlers();
+  document.addEventListener('auth:success', () => startVideo({ preferSound: true }));
+  document.addEventListener('auth:logout', () => {
+    stopVideo();
+    showLanding();
+  });
   bootstrap();
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp, { once: true });
+} else {
+  initApp();
+}

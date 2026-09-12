@@ -1,50 +1,49 @@
 import { describe, it, expect } from 'vitest';
-import { registerUser, authenticateUser, UserError } from '../../server/services/users.js';
+import { signInWithProvider, UserError } from '../../server/services/users.js';
 
-describe('registerUser', () => {
-  it('создаёт пользователя с корректным логином и паролем', async () => {
-    const user = await registerUser({ login: 'alice', password: 'longpassword' });
+describe('signInWithProvider', () => {
+  it('создаёт пользователя для поддерживаемого провайдера', async () => {
+    const user = await signInWithProvider({
+      provider: 'telegram',
+      providerUserId: 'telegram-user-000001',
+    });
     expect(user.id).toBeGreaterThan(0);
-    expect(user.login).toBe('alice');
+    expect(user.provider).toBe('telegram');
+    expect(user.displayName).toMatch(/^Telegram /);
   });
 
-  it('нормализует логин к нижнему регистру и trim-у', async () => {
-    const user = await registerUser({ login: '  Bob  ', password: 'longpassword' });
-    expect(user.login).toBe('bob');
+  it('возвращает того же пользователя при повторном входе', async () => {
+    const first = await signInWithProvider({
+      provider: 'google',
+      providerUserId: 'google-user-000001',
+    });
+    const second = await signInWithProvider({
+      provider: 'google',
+      providerUserId: 'google-user-000001',
+    });
+    expect(second.id).toBe(first.id);
+    expect(second.displayName).toBe(first.displayName);
   });
 
-  it('отказывает на коротком пароле', async () => {
-    await expect(registerUser({ login: 'short', password: '1234567' }))
-      .rejects.toBeInstanceOf(UserError);
+  it('нормализует provider к нижнему регистру', async () => {
+    const user = await signInWithProvider({
+      provider: 'YANDEX',
+      providerUserId: 'yandex-user-000001',
+    });
+    expect(user.provider).toBe('yandex');
   });
 
-  it('отказывает на невалидном логине', async () => {
-    await expect(registerUser({ login: 'a b', password: 'longpassword' }))
-      .rejects.toMatchObject({ code: 'invalid_login' });
+  it('отказывает на неизвестном провайдере', async () => {
+    await expect(signInWithProvider({
+      provider: 'vk',
+      providerUserId: 'vk-user-000001',
+    })).rejects.toMatchObject({ code: 'invalid_provider' });
   });
 
-  it('отказывает на повторе логина', async () => {
-    await registerUser({ login: 'taken', password: 'longpassword' });
-    await expect(registerUser({ login: 'taken', password: 'otherpassword' }))
-      .rejects.toMatchObject({ code: 'login_taken' });
-  });
-});
-
-describe('authenticateUser', () => {
-  it('логинит существующего пользователя', async () => {
-    await registerUser({ login: 'charlie', password: 'longpassword' });
-    const user = await authenticateUser({ login: 'charlie', password: 'longpassword' });
-    expect(user.login).toBe('charlie');
-  });
-
-  it('отказывает с неверным паролем', async () => {
-    await registerUser({ login: 'dave', password: 'longpassword' });
-    await expect(authenticateUser({ login: 'dave', password: 'wrongpassword' }))
-      .rejects.toMatchObject({ code: 'invalid_credentials' });
-  });
-
-  it('возвращает одну и ту же ошибку для несуществующего юзера (защита от user-enumeration)', async () => {
-    await expect(authenticateUser({ login: 'ghost', password: 'anything-here' }))
-      .rejects.toMatchObject({ code: 'invalid_credentials' });
+  it('отказывает на слишком коротком provider user id', async () => {
+    await expect(signInWithProvider({
+      provider: 'telegram',
+      providerUserId: 'short',
+    })).rejects.toBeInstanceOf(UserError);
   });
 });
