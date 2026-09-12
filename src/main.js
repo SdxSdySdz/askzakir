@@ -3,7 +3,7 @@ import { api } from './api.js';
 import { initVideo, showUI, startVideo, stopVideo, tryUnmute } from './video.js';
 import { send, initChat } from './chat.js';
 import { initDrawer, loadChats, renderDrawerFooter, hideDrawerForStaticMode } from './drawer.js';
-import { initAuth } from './auth.js';
+import { initAuth, closeAuthModal } from './auth.js';
 import { initLanding, showLanding, hideLanding } from './landing.js';
 import { initDevPanel } from './devpanel.js';
 import { initFrontendSentry, reportFrontendError } from './observability.js';
@@ -95,6 +95,7 @@ async function bootstrap() {
     const { user, billing } = await api('GET', '/api/me');
     appState.user = user;
     setBilling(billing);
+    closeAuthModal();
     hideLanding();
     startVideo();
     renderDrawerFooter();

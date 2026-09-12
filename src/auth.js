@@ -38,6 +38,7 @@ export function initAuth() {
   if (authBackdrop) authBackdrop.addEventListener('click', closeAuthModal);
 
   document.addEventListener('auth:gate', () => openAuthModal(GREETING_TEXT));
+  document.addEventListener('auth:success', () => closeAuthModal());
 
   document.addEventListener('pending:send', (e) => {
     const text = e.detail.text;
