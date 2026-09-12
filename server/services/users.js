@@ -32,7 +32,7 @@ function makeDisplayName(provider, providerUserId) {
   return `${providerLabel(provider)} ${suffix}`;
 }
 
-export async function signInWithProvider({ provider, providerUserId }) {
+export async function signInWithProvider({ provider, providerUserId, displayName }) {
   provider = normaliseProvider(provider);
   providerUserId = normaliseProviderUserId(providerUserId);
 
@@ -48,9 +48,20 @@ export async function signInWithProvider({ provider, providerUserId }) {
     };
   }
 
-  const displayName = makeDisplayName(provider, providerUserId);
-  const info = stmts.insertUser.run(provider, providerUserId, displayName, Date.now());
-  return { id: info.lastInsertRowid, provider, displayName };
+  const finalDisplayName = displayName?.trim() || makeDisplayName(provider, providerUserId);
+  const info = stmts.insertUser.run(provider, providerUserId, finalDisplayName, Date.now());
+  return { id: info.lastInsertRowid, provider, displayName: finalDisplayName };
+}
+
+export function getUserById(id) {
+  const row = stmts.getUserById.get(id);
+  if (!row) return null;
+  return {
+    id: row.id,
+    provider: row.provider,
+    displayName: row.display_name,
+    createdAt: row.created_at,
+  };
 }
 
 export function publicUser(u) {
@@ -60,3 +71,5 @@ export function publicUser(u) {
     displayName: u.display_name ?? u.displayName,
   };
 }
+
+export const sanitizeUser = publicUser;

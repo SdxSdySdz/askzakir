@@ -1,114 +1,41 @@
 import { appState, GREETING_TEXT, readPending, writePending, clearPending } from './state.js';
-import { api, AUTH_ERROR_MAP } from './api.js';
 import { fillQuestionInput } from './chat.js';
-import { loadChats, renderDrawerFooter } from './drawer.js';
-import { primeVideoAudio, stopVideo } from './video.js';
-import { setBilling } from './billing.js';
 
-const AUTH_PROVIDER_KEY = 'askzakir:provider-identities';
 const authModal = document.getElementById('auth-modal');
 const authBackdrop = document.getElementById('auth-backdrop');
-const authForm = document.getElementById('auth-form');
 const authTitle = document.getElementById('auth-title');
 const authGreeting = document.getElementById('auth-greeting');
 const authError = document.getElementById('auth-error');
 const authCloseBtn = document.getElementById('auth-close');
-const providerButtons = Array.from(document.querySelectorAll('.auth-provider'));
-
-function providerLabel(provider) {
-  if (provider === 'telegram') return 'Телеграм';
-  if (provider === 'google') return 'Гугл почта';
-  if (provider === 'yandex') return 'Яндекс почта';
-  return 'Провайдер';
-}
-
-function readProviderMap() {
-  try {
-    return JSON.parse(localStorage.getItem(AUTH_PROVIDER_KEY) || '{}');
-  } catch {
-    return {};
-  }
-}
-
-function writeProviderMap(map) {
-  try {
-    localStorage.setItem(AUTH_PROVIDER_KEY, JSON.stringify(map));
-  } catch {}
-}
-
-function ensureProviderIdentity(provider) {
-  const map = readProviderMap();
-  if (!map[provider]) {
-    map[provider] = crypto.randomUUID().replace(/-/g, '');
-    writeProviderMap(map);
-  }
-  return map[provider];
-}
-
-function setBusy(state) {
-  for (const button of providerButtons) button.disabled = state;
-}
 
 export function openAuthModal(greetingText) {
-  authTitle.textContent = 'Выберите способ входа';
-  authError.textContent = '';
-  if (greetingText) {
+  if (authTitle) authTitle.textContent = 'Вход через Google';
+  if (authError) authError.textContent = '';
+  if (greetingText && authGreeting) {
     authGreeting.textContent = greetingText;
     authGreeting.hidden = false;
-  } else {
+  } else if (authGreeting) {
     authGreeting.hidden = true;
   }
-  authBackdrop.classList.add('open');
-  authModal.classList.add('open');
+  if (authBackdrop) authBackdrop.classList.add('open');
+  if (authModal) authModal.classList.add('open');
 }
 
 export function closeAuthModal() {
-  authModal.classList.remove('open');
-  authBackdrop.classList.remove('open');
+  if (authModal) authModal.classList.remove('open');
+  if (authBackdrop) authBackdrop.classList.remove('open');
 }
 
-async function signIn(provider) {
-  authError.textContent = '';
-  setBusy(true);
-  try {
-    const providerUserId = ensureProviderIdentity(provider);
-    const { user, billing } = await api('POST', '/api/auth/provider', { provider, providerUserId });
-    appState.user = user;
-    setBilling(billing);
-    closeAuthModal();
-    await loadChats();
-    renderDrawerFooter();
-    const pending = readPending();
-    if (pending) {
-      clearPending();
-      appState.currentChatId = 'new';
-      document.dispatchEvent(new CustomEvent('auth:success', { detail: { pending } }));
-      fillQuestionInput(pending);
-    } else {
-      document.dispatchEvent(new CustomEvent('auth:success'));
-    }
-  } catch (err) {
-    stopVideo();
-    const providerName = providerLabel(provider);
-    authError.textContent =
-      AUTH_ERROR_MAP[err.code] || `Не удалось войти через ${providerName}. Попробуйте ещё раз.`;
-  } finally {
-    setBusy(false);
+export function showAuthError(message) {
+  if (authError) {
+    authError.textContent = message;
+    openAuthModal();
   }
 }
 
-async function handleSubmit(e) {
-  e.preventDefault();
-  const provider = e.submitter?.dataset?.provider;
-  if (!provider) return;
-  primeVideoAudio();
-  await signIn(provider);
-}
-
 export function initAuth() {
-  authCloseBtn.addEventListener('click', closeAuthModal);
-  authBackdrop.addEventListener('click', closeAuthModal);
-  authForm.addEventListener('submit', handleSubmit);
+  if (authCloseBtn) authCloseBtn.addEventListener('click', closeAuthModal);
+  if (authBackdrop) authBackdrop.addEventListener('click', closeAuthModal);
 
   document.addEventListener('auth:gate', () => openAuthModal(GREETING_TEXT));
 
@@ -123,4 +50,17 @@ export function initAuth() {
     }
   });
   document.addEventListener('pending:dismiss', () => clearPending());
+
+  // Check URL parameters for OAuth errors
+  const urlParams = new URLSearchParams(window.location.search);
+  const authErr = urlParams.get('auth_error');
+  if (authErr) {
+    const errorMessages = {
+      state_mismatch: 'Ошибка проверки сессии входа. Пожалуйста, попробуйте еще раз.',
+      token_exchange_failed: 'Не удалось подтвердить вход в Google. Попробуйте еще раз.',
+      userinfo_failed: 'Не удалось получить данные профиля Google.',
+      access_denied: 'Вход через Google был отменен.',
+    };
+    showAuthError(errorMessages[authErr] || `Ошибка авторизации: ${authErr}`);
+  }
 }

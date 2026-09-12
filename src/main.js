@@ -83,6 +83,14 @@ function initGlobalGestureHandlers() {
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────
 async function bootstrap() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const authSuccess = urlParams.get('auth_success');
+  const authErr = urlParams.get('auth_error');
+  if (authSuccess || authErr) {
+    const cleanUrl = window.location.pathname + window.location.hash;
+    window.history.replaceState({}, document.title, cleanUrl);
+  }
+
   try {
     const { user, billing } = await api('GET', '/api/me');
     appState.user = user;
