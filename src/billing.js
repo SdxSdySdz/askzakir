@@ -116,8 +116,11 @@ function renderPricingCards() {
 
     const planImg = PLAN_IMAGES[plan.code] || '';
     card.innerHTML = `
-      ${marker}
-      ${planImg ? `<div class="pricing-card-image-wrap"><img src="${planImg}" alt="${plan.name}" class="pricing-card-img" loading="lazy"></div>` : ''}
+      ${planImg ? `<div class="pricing-card-image-wrap">
+        <img src="${planImg}" alt="${plan.name}" class="pricing-card-img" loading="lazy">
+        <div class="pricing-card-image-overlay"></div>
+        ${marker}
+      </div>` : marker}
       <div class="pricing-card-name">${plan.name}</div>
       <div class="pricing-card-price">
         <span>${price.main}</span>

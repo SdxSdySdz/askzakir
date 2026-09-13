@@ -1275,8 +1275,7 @@ body:not(.dev-mode) #dev-panel {
 .pricing-marker-empty {
   width: fit-content;
   min-height: 26px;
-  margin-bottom: 12px;
-  padding: 4px 10px;
+  padding: 4px 12px;
   border-radius: 999px;
   font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: 14px;
@@ -1286,31 +1285,52 @@ body:not(.dev-mode) #dev-panel {
 }
 
 .pricing-badge {
-  background: rgba(222, 193, 136, 0.22);
+  background: rgba(30, 24, 16, 0.85);
   color: var(--gold-hi);
-  border: 1px solid rgba(222, 193, 136, 0.35);
+  border: 1px solid rgba(222, 193, 136, 0.55);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
 }
 
 .pricing-current {
-  background: rgba(245, 230, 200, 0.12);
+  background: rgba(20, 18, 16, 0.85);
   color: var(--cream);
-  border: 1px solid rgba(245, 230, 200, 0.2);
+  border: 1px solid rgba(245, 230, 200, 0.35);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
 }
 
 .pricing-marker-empty {
-  visibility: hidden;
+  display: none;
 }
 
 .pricing-card-image-wrap {
   position: relative;
   width: 100%;
-  height: 160px;
+  aspect-ratio: 4 / 3;
+  min-height: 190px;
   margin-bottom: 16px;
   border-radius: 8px;
   overflow: hidden;
-  border: 1px solid rgba(201, 169, 106, 0.25);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(201, 169, 106, 0.28);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
   background: rgba(0, 0, 0, 0.4);
+}
+
+.pricing-card-image-wrap .pricing-badge,
+.pricing-card-image-wrap .pricing-current {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+}
+
+.pricing-card-image-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.05) 50%, rgba(12,10,8,0.45) 100%);
+  z-index: 1;
 }
 
 .pricing-card-img {
@@ -1318,11 +1338,11 @@ body:not(.dev-mode) #dev-panel {
   height: 100%;
   object-fit: cover;
   display: block;
-  transition: transform 0.45s ease;
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .pricing-card:hover .pricing-card-img {
-  transform: scale(1.06);
+  transform: scale(1.08);
 }
 
 .pricing-card-name {
@@ -1959,7 +1979,8 @@ body:not(.dev-mode) #dev-panel {
     padding: 18px 16px;
   }
   .pricing-card-image-wrap {
-    height: 180px;
+    min-height: 220px;
+    aspect-ratio: 16 / 10;
   }
   .pricing-request-row {
     flex-direction: column;
