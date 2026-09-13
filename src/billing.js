@@ -31,6 +31,13 @@ function statusText(billing) {
   return `${billing.plan.name} · осталось ${billing.remaining}/${billing.limit}`;
 }
 
+const PLAN_IMAGES = {
+  free: 'assets/plans/free.jpg',
+  plus: 'assets/plans/plus.jpg',
+  extra: 'assets/plans/extra.jpg',
+  ultra: 'assets/plans/ultra.jpg',
+};
+
 function currentPlanCode() {
   return appState.billing?.plan?.code || 'free';
 }
@@ -107,8 +114,10 @@ function renderPricingCards() {
       : (plan.popular ? '<div class="pricing-badge">Лучший выбор</div>' : '<div class="pricing-marker-empty"></div>');
     const buttonText = isCurrent ? 'Текущий тариф' : (plan.code === 'free' ? 'Бесплатный' : 'Оставить заявку');
 
+    const planImg = PLAN_IMAGES[plan.code] || '';
     card.innerHTML = `
       ${marker}
+      ${planImg ? `<div class="pricing-card-image-wrap"><img src="${planImg}" alt="${plan.name}" class="pricing-card-img" loading="lazy"></div>` : ''}
       <div class="pricing-card-name">${plan.name}</div>
       <div class="pricing-card-price">
         <span>${price.main}</span>
